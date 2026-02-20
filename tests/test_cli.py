@@ -100,3 +100,27 @@ def test_process_config_missing_config_dict(sample_excel, tmp_path):
     assert result.exit_code != 0
     assert "must define a 'config'" in result.output
     assert "dict" in result.output
+
+
+def test_process_invalid_sheet_name_gives_clear_error(sample_excel, tmp_path):
+    """Config with nonexistent sheet_to_keep should give a clear error, not crash."""
+    bad_config = tmp_path / "bad_sheet_config.py"
+    bad_config.write_text("""\
+config = {
+    "version": "1.0.0",
+    "sheets_to_keep": ["NonExistentSheet"],
+    "entity_columns": {},
+    "numeric_rules": {},
+    "preserve_columns": [],
+}
+""")
+    output = tmp_path / "output.xlsx"
+    result = runner.invoke(app, [
+        "process", str(sample_excel),
+        str(output),
+        "--config", str(bad_config),
+    ])
+    assert result.exit_code != 0
+    assert "sheet" in result.output.lower()
+    # Must name the missing sheet so the user knows what to fix
+    assert "NonExistentSheet" in result.output

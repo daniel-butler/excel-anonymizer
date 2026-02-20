@@ -5,8 +5,9 @@ These rules preserve statistical properties and business constraints
 while anonymizing numeric data.
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import random
+import random as stdlib_random
 import pandas as pd
 
 
@@ -42,16 +43,18 @@ class PercentageVarianceRule(NumericAnonymizationRule):
         # Anonymized: [87, 234, 281] (varies by ±30%, preserves distribution shape)
     """
     variance_pct: float = 0.3  # ±30% default
+    rng: stdlib_random.Random | None = field(default=None, compare=False)
 
     def apply(self, series: pd.Series, context: dict[str, pd.Series]) -> pd.Series:
         """Add random noise ±variance_pct to each value"""
+        _rng = self.rng if self.rng is not None else random
 
         def add_noise(value):
             if pd.isna(value):
                 return value
             if value == 0:
                 return 0.0  # Don't add noise to zero values
-            noise = value * random.uniform(-self.variance_pct, self.variance_pct)
+            noise = value * _rng.uniform(-self.variance_pct, self.variance_pct)
             return value + noise
 
         anonymized = series.apply(add_noise)

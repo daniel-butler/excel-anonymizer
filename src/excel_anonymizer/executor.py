@@ -10,6 +10,8 @@ Architecture:
     6. Preserve configured columns
     7. Write anonymized Excel file
 """
+import json
+import random as stdlib_random
 import pandas as pd
 from pathlib import Path
 from typing import Dict
@@ -48,6 +50,7 @@ class AnonymizationExecutor:
         self.config = config
         self.entity_mapper = EntityMapper(seed=seed)
         self.seed = seed
+        self.rng = stdlib_random.Random(seed) if seed is not None else stdlib_random.Random()
 
     def anonymize_file(self, input_path: str | Path, output_path: str | Path, auto_suffix: bool = True) -> dict:
         """
@@ -80,6 +83,15 @@ class AnonymizationExecutor:
         if sheets_to_keep:
             filtered_sheets = {name: df for name, df in all_sheets.items() if name in sheets_to_keep}
             print(f"  Keeping {len(filtered_sheets)}/{len(all_sheets)} sheets: {list(filtered_sheets.keys())}")
+            if not filtered_sheets:
+                available = list(all_sheets.keys())
+                missing = [s for s in sheets_to_keep if s not in all_sheets]
+                raise ValueError(
+                    f"No sheets found after filtering. "
+                    f"Requested: {sheets_to_keep}. "
+                    f"Available sheets: {available}. "
+                    f"Missing: {missing}"
+                )
         else:
             filtered_sheets = all_sheets
             print(f"  No sheet filtering (keeping all {len(filtered_sheets)} sheets)")
@@ -198,8 +210,13 @@ class AnonymizationExecutor:
                 continue
 
             if isinstance(rule, PercentageVarianceRule):
+                # Inject executor's seeded rng for reproducibility
+                rule_with_rng = PercentageVarianceRule(
+                    variance_pct=rule.variance_pct,
+                    rng=self.rng,
+                )
                 print(f"    Anonymizing numeric: {col_name} (±{rule.variance_pct*100:.0f}% variance)")
-                df[col_name] = rule.apply(df[col_name], context)
+                df[col_name] = rule_with_rng.apply(df[col_name], context)
                 # Update context with anonymized value
                 context[col_name] = df[col_name]
 
@@ -223,7 +240,6 @@ class AnonymizationExecutor:
         Args:
             output_path: Path to write mapping report (JSON)
         """
-        import json
 
         output_path = Path(output_path)
         mappings = self.entity_mapper.to_dict()
