@@ -1,6 +1,6 @@
 # excel-anon
 
-You have a real Excel report full of employee names, client organizations, and revenue figures. You need a test fixture that matches its structure. `excel-anon` strips the sensitive data and replaces it with realistic fakes, preserving column layouts, data types, and numeric relationships like Gross Margin = Revenue - Cost.
+Turn a real Excel file into a safe test fixture — fake names, fake numbers, real structure.
 
 ## Install
 
@@ -12,23 +12,15 @@ pip install git+https://github.com/your-org/excel-anonymizer.git
 uv add git+https://github.com/your-org/excel-anonymizer.git
 ```
 
-## How it works
+## Quickstart
 
-`excel-anon` uses an LLM to author the anonymization config, so you never write column mappings by hand. Run `analyze` on your file and it prints a prompt describing the file's columns and sample data. Paste that prompt into Claude or ChatGPT and the LLM returns a config dict you save to a `.py` file. Then run `process` with that config and the tool writes a `_SYNTHETIC.xlsx` beside the original.
-
-## Quick start
-
-**Step 1: Analyze the file**
+1. Run `analyze` on your file. It prints a prompt describing the columns and sample data — copy it.
 
 ```bash
 excel-anon analyze "Q4 Expense Report.xlsx"
 ```
 
-The command prints a prompt to your terminal. Copy it.
-
-**Step 2: Paste into an LLM, save the config**
-
-The LLM returns a config dict. Save it:
+2. Paste the prompt into Claude or ChatGPT. Save the config it returns:
 
 ```python
 # q4_expense_config.py
@@ -53,18 +45,18 @@ config = {
 }
 ```
 
-**Step 3: Process the file**
+3. Run `process`. The output lands beside the original.
 
 ```bash
 excel-anon process "Q4 Expense Report.xlsx" --config q4_expense_config.py
 # Output: Q4 Expense Report_SYNTHETIC.xlsx
 ```
 
-## Config reference
+## Reference
 
 ### Entity types
 
-Assign an entity type to each column containing identifiable data. The tool generates a consistent fake value per unique input, so the same name always maps to the same fake name within a file.
+Each unique value maps to the same fake value throughout the file, so relationships between rows stay intact.
 
 | Type | Generates |
 |------|-----------|
@@ -79,24 +71,24 @@ Assign an entity type to each column containing identifiable data. The tool gene
 
 ### Numeric rules
 
-**`PercentageVarianceRule`** replaces each value with a random value within a percentage band of the original. Use it for independent figures like headcount or individual expenses.
+**`PercentageVarianceRule`** replaces each value with a random number within a band of the original. Use it for independent figures.
 
 ```python
 "Headcount": PercentageVarianceRule(variance_pct=0.15)
-# A value of 100 becomes a random number between 85 and 115.
+# 100 becomes a random number between 85 and 115.
 ```
 
-**`PreserveRelationshipRule`** derives a value from other already-anonymized columns using a formula. Use it for any column that is computed from other columns, so the arithmetic stays consistent in the output file.
+**`PreserveRelationshipRule`** derives a value from other already-anonymized columns. Use it wherever one column is computed from others, so the arithmetic stays consistent.
 
 ```python
 "Gross Margin": PreserveRelationshipRule(
     formula="context['Revenue'] - context['Cost']",
     dependent_columns=["Revenue", "Cost"],
 )
-# Gross Margin will always equal the anonymized Revenue minus the anonymized Cost.
+# Gross Margin will always equal anonymized Revenue minus anonymized Cost.
 ```
 
-## Commands
+### All commands
 
 | Command | Description |
 |---------|-------------|
