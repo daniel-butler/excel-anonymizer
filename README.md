@@ -5,11 +5,11 @@ Turn a real Excel file into a safe test fixture — fake names, fake numbers, re
 ## Install
 
 ```bash
-pip install git+https://github.com/your-org/excel-anonymizer.git
+pip install git+https://github.com/daniel-butler/excel-anonymizer.git
 ```
 
 ```bash
-uv add git+https://github.com/your-org/excel-anonymizer.git
+uv add git+https://github.com/daniel-butler/excel-anonymizer.git
 ```
 
 ## Quickstart
