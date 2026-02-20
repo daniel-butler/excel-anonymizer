@@ -1,9 +1,6 @@
-# excel-anonymizer
+# excel-anon
 
-CLI for creating PII-safe Excel test fixtures.
-
-Analyzes Excel files and anonymizes sensitive data (names, organizations, financials)
-while preserving structure and statistical properties.
+You have a real Excel report full of employee names, client organizations, and revenue figures. You need a test fixture that matches its structure. `excel-anon` strips the sensitive data and replaces it with realistic fakes, preserving column layouts, data types, and numeric relationships like Gross Margin = Revenue - Cost.
 
 ## Install
 
@@ -11,55 +8,63 @@ while preserving structure and statistical properties.
 pip install git+https://github.com/your-org/excel-anonymizer.git
 ```
 
-Or with uv:
 ```bash
 uv add git+https://github.com/your-org/excel-anonymizer.git
 ```
 
-## Workflow
+## How it works
 
-### Step 1: Analyze your file
+`excel-anon` uses an LLM to author the anonymization config, so you never write column mappings by hand. Run `analyze` on your file and it prints a prompt describing the file's columns and sample data. Paste that prompt into Claude or ChatGPT and the LLM returns a config dict you save to a `.py` file. Then run `process` with that config and the tool writes a `_SYNTHETIC.xlsx` beside the original.
+
+## Quick start
+
+**Step 1: Analyze the file**
 
 ```bash
-excel-anon analyze "My Report.xlsx"
+excel-anon analyze "Q4 Expense Report.xlsx"
 ```
 
-This prints a prompt. Copy it into Claude or ChatGPT.
+The command prints a prompt to your terminal. Copy it.
 
-### Step 2: Save the config
+**Step 2: Paste into an LLM, save the config**
 
-The LLM returns a config dict. Save it to a Python file:
+The LLM returns a config dict. Save it:
 
 ```python
-# my_config.py
+# q4_expense_config.py
 from excel_anonymizer import PercentageVarianceRule, PreserveRelationshipRule
 
 config = {
     "version": "1.0.0",
-    "sheets_to_keep": ["Sheet1"],
+    "sheets_to_keep": ["Expenses"],
     "entity_columns": {
+        "Employee Name": "PERSON",
+        "Department": "ORGANIZATION",
         "Manager": "PERSON",
-        "Client": "ORGANIZATION",
     },
     "numeric_rules": {
-        "Revenue": PercentageVarianceRule(variance_pct=0.3),
-        "Margin": PreserveRelationshipRule(
-            formula="context['Revenue'] - context['Cost']",
-            dependent_columns=["Revenue", "Cost"],
+        "Reimbursement": PercentageVarianceRule(variance_pct=0.2),
+        "Net Amount": PreserveRelationshipRule(
+            formula="context['Reimbursement'] - context['Deduction']",
+            dependent_columns=["Reimbursement", "Deduction"],
         ),
     },
-    "preserve_columns": ["Date", "Project Type"],
+    "preserve_columns": ["Date", "Category"],
 }
 ```
 
-### Step 3: Anonymize
+**Step 3: Process the file**
 
 ```bash
-excel-anon process "My Report.xlsx" --config my_config.py
-# Output: My Report_SYNTHETIC.xlsx
+excel-anon process "Q4 Expense Report.xlsx" --config q4_expense_config.py
+# Output: Q4 Expense Report_SYNTHETIC.xlsx
 ```
 
-## Entity Types
+## Config reference
+
+### Entity types
+
+Assign an entity type to each column containing identifiable data. The tool generates a consistent fake value per unique input, so the same name always maps to the same fake name within a file.
 
 | Type | Generates |
 |------|-----------|
@@ -72,12 +77,31 @@ excel-anon process "My Report.xlsx" --config my_config.py
 | `PROJECT_NAME` | Project name |
 | `LOCATION` | City, State |
 
+### Numeric rules
+
+**`PercentageVarianceRule`** replaces each value with a random value within a percentage band of the original. Use it for independent figures like headcount or individual expenses.
+
+```python
+"Headcount": PercentageVarianceRule(variance_pct=0.15)
+# A value of 100 becomes a random number between 85 and 115.
+```
+
+**`PreserveRelationshipRule`** derives a value from other already-anonymized columns using a formula. Use it for any column that is computed from other columns, so the arithmetic stays consistent in the output file.
+
+```python
+"Gross Margin": PreserveRelationshipRule(
+    formula="context['Revenue'] - context['Cost']",
+    dependent_columns=["Revenue", "Cost"],
+)
+# Gross Margin will always equal the anonymized Revenue minus the anonymized Cost.
+```
+
 ## Commands
 
-```
-excel-anon analyze <file>              Analyze file, generate LLM prompt
-excel-anon analyze <file> -o out.txt   Save prompt to file
-excel-anon analyze-multi f1 f2 f3      Analyze multiple files for schema patterns
-excel-anon process <file> --config c   Anonymize file using config
-excel-anon process <file> out.xlsx --config c --seed 123
-```
+| Command | Description |
+|---------|-------------|
+| `excel-anon analyze <file>` | Analyze file and print LLM prompt |
+| `excel-anon analyze <file> -o prompt.txt` | Save LLM prompt to a file |
+| `excel-anon analyze-multi f1 f2 f3` | Analyze multiple files for shared schema patterns |
+| `excel-anon process <file> --config config.py` | Anonymize file using config |
+| `excel-anon process <file> out.xlsx --config config.py --seed 42` | Write to named output with fixed random seed |
